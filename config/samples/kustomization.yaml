@@ -1,0 +1,5 @@
+## Append samples you want in your CSV to this file as resources ##
+resources:
+- sporc_v1alpha1_response.yaml
+- sporc_v1alpha1_responseconfig.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

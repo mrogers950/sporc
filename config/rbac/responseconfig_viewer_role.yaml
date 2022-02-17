@@ -1,0 +1,20 @@
+# permissions for end users to view responseconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: responseconfig-viewer-role
+rules:
+- apiGroups:
+  - sporc.example.com
+  resources:
+  - responseconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - sporc.example.com
+  resources:
+  - responseconfigs/status
+  verbs:
+  - get

@@ -1,0 +1,6 @@
+apiVersion: sporc.example.com/v1alpha1
+kind: ResponseConfig
+metadata:
+  name: responseconfig-sample
+spec:
+  # Add fields here
