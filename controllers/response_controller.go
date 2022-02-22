@@ -19,9 +19,13 @@ package controllers
 import (
 	"context"
 	"errors"
+	"github.com/go-logr/logr"
 	"github.com/mrogers950/sporc/controllers/crl"
 	v1 "k8s.io/api/core/v1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+	"reflect"
+
 	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
@@ -53,7 +57,7 @@ type ResponseReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.10.0/pkg/reconcile
 func (r *ResponseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	// your logic here!!!!!!!!!!!!!!!!!!!
 	config := &sporcv1alpha1.ResponseConfig{}
@@ -100,17 +104,7 @@ func (r *ResponseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, listErr
 	}
 
-	if apierr.IsNotFound(listErr) {
-		// none found, create
-		// return createNewResponses(r, newCrl, responses)
-	}
-
-	// compare CRL updates with current responses. (right now check for added revocations)
-	if hasNewRevocations(r, newCrl, responses) {
-		// return updateResponses(r, newCrl, responses)
-	}
-
-	return ctrl.Result{}, nil
+	return createOrUpdateResponses(logger, ctx, r, newCrl, responses)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -124,11 +118,7 @@ func hasNewRevocations(r *ResponseReconciler, newCrl, current *sporcv1alpha1.Res
 	return len(newCrl.Items) != len(current.Items)
 }
 
-//func createNewResponses(ctx context.Context, r *ResponseReconciler, newCrl, current *sporcv1alpha1.ResponseList) (ctrl.Result, error) {
-//
-// }
-
-func updateResponses(ctx context.Context, r *ResponseReconciler, newCrl, current *sporcv1alpha1.ResponseList) (ctrl.Result, error) {
+func createOrUpdateResponses(logger logr.Logger, ctx context.Context, r *ResponseReconciler, newCrl, current *sporcv1alpha1.ResponseList) (ctrl.Result, error) {
 	if len(newCrl.Items) == 0 {
 		return ctrl.Result{}, nil
 	}
@@ -141,10 +131,23 @@ func updateResponses(ctx context.Context, r *ResponseReconciler, newCrl, current
 
 		if createErr := r.Create(ctx, resp, &client.CreateOptions{}); createErr != nil {
 			if apierr.IsAlreadyExists(createErr) {
-
+				existingResponse := &sporcv1alpha1.Response{}
+				if getErr := r.Get(ctx, types.NamespacedName{Name: nc.Name, Namespace: nc.Namespace}, existingResponse); getErr != nil {
+					return ctrl.Result{}, getErr
+				}
+				if !reflect.DeepEqual(existingResponse.Status, resp.Status) {
+					existingCopy := existingResponse.DeepCopy()
+					existingCopy.Status = resp.Status
+					if updateErr := r.Update(ctx, existingCopy); updateErr != nil {
+						return ctrl.Result{}, updateErr
+					}
+					logger.Info("updated response: %#v", existingCopy)
+				}
+				continue
 			}
 			return ctrl.Result{}, createErr
 		}
+		logger.Info("created response: %#v", resp)
 	}
 	return ctrl.Result{}, nil
 }
